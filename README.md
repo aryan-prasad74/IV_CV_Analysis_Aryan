@@ -18,18 +18,28 @@ Note: It is recommended to save all these modules in the same directory
 ### Functions Library (Functions.py)
 **Required python libraries**: numpy, pandas, matplotlib.pyplot, csv, scipy (stats, optimize.fsolve, interpolate.UnivariateSpline), seaborn, openpyxl
 
+To run on lxplus, you will want to set up a virtual environment
+```
+virtualenv -p `which python` venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install --upgrade setuptools
+```
+
 Most of these libraries should come built-in with python 
-To install openpyxl: 
-```bash
-$ pip install openpyxl
+
 ```
-To install seaborn
-```bash
-$ pip install seaborn
+pip install openpyxl
+pip install seaborn
+pip install scipy
+pip install matplotlib
+pip install pandas
 ```
-To install scipy 
-```bash
-$ pip install scipy
+
+After the virtual environment has been created, it can be reactivated in a new terminal with
+
+```
+source venv/bin/activate
 ```
 
 This is the functions library that contains all the functions used by IV.py, IVmultiple.py, CV.py, and CVmultiple.py. The functions are listed in alphabetical order and descriptions of the function and all the input parameters, optional input paramaters, return parameters are provided in the module. 
@@ -172,6 +182,11 @@ There is also a built in capability to save the wafer number, detector type and 
 fun.tablebvol(xlpath,wafers[n],'A', 'Breakdown Voltage')
 fun.tablebvol(xlpath, filelist[i],'B', 'Breakdown Voltage')
 os.system("python IV.py --file " + filedir +  " --impathIV "+ impathIV+ " --xlpath "+xlpath) 
+```
+
+
+```python
+python IV.py --fileName fileName --impathIV impathIV --rowID BEGIN --voltageColumn 0 --currentColumn 2
 ```
 
 ### CV Analysis (CV.py and CVmultiple.py)

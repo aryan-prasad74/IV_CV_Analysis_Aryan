@@ -42,8 +42,8 @@ for n in range(0, len(wafers)):
         impathCVinv = "CVinv_plots/" + wafers[n] + "/" + filelist[i][:-4]+".png" #MODIFY FOR USER
         impathDPWcut = "DPW_plots/"+ wafers[n] + "/" + filelist[i][:-4] + "_cut"+".png" #MODIFY FOR USER
         
-        fun.tablebvol(xlpath,wafers[n],'A', 'CV')
-        fun.tablebvol(xlpath, filelist[i],'B', 'CV')
+        fun.tablebreakdownVol(xlpath,wafers[n],'A', 'CV')
+        fun.tablebreakdownVol(xlpath, filelist[i],'B', 'CV')
         
         
         print(impathCV)

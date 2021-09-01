@@ -24,7 +24,7 @@ from openpyxl import load_workbook
 """
 Functions
 """
-def bvol(df, x, y, thresh = 0.9995):
+def breakdownVol(df, x, y, thresh = 0.9995):
     """
     Parameters:
         df: Pandas dataframe 
@@ -33,12 +33,12 @@ def bvol(df, x, y, thresh = 0.9995):
     Optional Parameters: 
         thresh: Float - r squared threshold value
     Returns:
-        bvol: Float - Breakdown Voltage 
+        breakdownVol: Float - Breakdown Voltage 
     Note: 
         This function determines the breakdown by calculation the point where the relationship between the first and second derivative becomes extremely linear. 
     """
-    frst_der = manual_der(df[x], df[y])
-    scnd_der = manual_der(df[x], frst_der)
+    frst_der = manual_der(df[x].values, df[y].values)
+    scnd_der = manual_der(df[x].values, frst_der)
     
     r_value = 1
     N = 2
@@ -48,9 +48,9 @@ def bvol(df, x, y, thresh = 0.9995):
         slope, intercept, r_value, p_value, std_err = stats.linregress(X,Y)
         N = N+1
           
-    voltage = df[x].as_matrix()
-    bvol = voltage[-N+1]
-    return bvol
+    voltage = df[x].values
+    breakdownVol = voltage[-N+1]
+    return breakdownVol
         
 def calculate_width(C, A):
     """
@@ -76,9 +76,15 @@ def cleanupCV(df, x, y):
     Note: 
         The data is cleaned up so that it can be stored nicely in a dataframe. The cleanup proceduce is specific to the format of the textfile the CV data is stored in. 
     """
-    df = df.iloc[2:]
-    df.loc[x] = pd.to_numeric(df.loc[:,x])
+    df = df.iloc[0:len(df)-1]
+
+    df[x] = pd.to_numeric(df[x])
+    df[y] = pd.to_numeric(df[y])
+
     df[x] = abs(df[x])
+    df[y] = abs(df[y])
+
+    dfclean = (df.dropna(subset = [x, y]))
     return df 
 
 def cleanupIV(df, x, y):
@@ -92,14 +98,20 @@ def cleanupIV(df, x, y):
     Note: 
         The data is cleaned up so that it can be stored nicely in a dataframe. The cleanup proceduce is specific to the format of the textfile the IV data is stored in. 
     """
-    df = df.iloc[2:]
-    df[x] = df[x].convert_objects(convert_numeric=True)
+    df = df.iloc[0:len(df)-1]
+
+    df[x] = pd.to_numeric(df[x])
+    df.loc[y] = pd.to_numeric(df.loc[:,y])
+
+    # This complains, but I'm not sure what to do about it.
     df[x] = abs(df[x])
+    df[y] = abs(df[y])
+
     df["Outlier"] = ""
     dfclean = (df.dropna(subset = [x, y]))
     return dfclean  
 
-def dataplot(df, x, y,image_path, log, xlabel, ylabel, iden = "None", gaindeplvol = 0, totdeplvol = 0, gainwidth = 0, bvol = 0):
+def dataplot(df, x, y,image_path, log, xlabel, ylabel, iden = "None", gaindeplvol = 0, totdeplvol = 0, gainwidth = 0, breakdownVol = 0):
     """
     Parameters: 
         df: Pandas Dataframe 
@@ -114,7 +126,7 @@ def dataplot(df, x, y,image_path, log, xlabel, ylabel, iden = "None", gaindeplvo
         gaindeplvol: Float - value of depletion voltage of gain layer 
         totdeplvol: Float - value of total depletion voltage
         gainwidth: Float - value of peak of gain layer (measured in microns)
-        bvol: Float - value of breakdown voltage
+        breakdownVol: Float - value of breakdown voltage
     Returns:
         No returns but saves the plot     
     Note: 
@@ -122,7 +134,7 @@ def dataplot(df, x, y,image_path, log, xlabel, ylabel, iden = "None", gaindeplvo
         Given additional optional parameters, the function can produce more complex plots. 
     """
     plt.figure(figsize=(12,8)) 
-    plt.plot(df[x], df[y], '-')
+    plt.plot(df[x][1:], df[y][1:], '-')
     if log == "log":
         print("Log is working")
         plt.xscale('log')
@@ -135,7 +147,7 @@ def dataplot(df, x, y,image_path, log, xlabel, ylabel, iden = "None", gaindeplvo
         plt.axvline(totdeplvol, linestyle = '--', color = 'darkorchid', label = 'Total Depl Vol: '+ str(round(totdeplvol,1)))
         plt.legend()
     if iden == "IV":
-        plt.axvline(bvol, linestyle = '--', color = 'k', alpha = 0.5, label = 'Breakdown V: '+ str(round(bvol,1)) + " V")
+        plt.axvline(breakdownVol, linestyle = '--', color = 'k', alpha = 0.5, label = 'Breakdown V: '+ str(round(breakdownVol,1)) + " V")
         plt.legend()
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
@@ -184,7 +196,7 @@ def dataplotDPW(df, x, y,image_path, log, xlabel, ylabel, gainwidth, gainpeak,  
     plt.clf()
     plt.close()
 
-def dataplotIV(df,xd,yd,hued, impathIV, bvol):
+def dataplotIV(df,xd,yd,hued, impathIV, breakdownVol):
     """
     Parameters:
         df: Pandas Dataframe 
@@ -192,14 +204,14 @@ def dataplotIV(df,xd,yd,hued, impathIV, bvol):
         yd: String - name of y column in df 
         hued: String - name of hue column in df (Seaborn functionality for lmplot)
         impathIV: String - path where image will be saved 
-        bvol: Float - Breakdown Voltage 
+        breakdownVol: Float - Breakdown Voltage 
     Return:
         No returns but image is saved 
     Note:
         This is an outdated function that plots a visualiztion of how breakdown voltage is determined by plotting two linear fits of the data points and determining the point of intersection.
     """
     g = sns.lmplot(x = xd, y = yd, hue = hued, data = df, aspect = 1.5, legend = False )
-    plt.axvline(bvol, linestyle = '--', color = 'k', label = 'Breakdown Voltage: '+ str(round(bvol,1)))
+    plt.axvline(breakdownVol, linestyle = '--', color = 'k', label = 'Breakdown Voltage: '+ str(round(breakdownVol,1)))
     #g.set( yscale="log")
     #g.subplots(figsize=(20,15))
     g.set(ylim=(0, 5*10**-9))
@@ -221,10 +233,13 @@ def FWHM(arr_x,arr_y):
     difference = max(arr_y) - min(arr_y)
     HM = difference / 2
     
-    pos_extremum = arr_y.argmax()  # or in your case: arr_y.argmin()
+    #pos_extremum = arr_y.argmax()  # or in your case: arr_y.argmin()
+    pos_extremum = arr_y.argmin()  # or in your case: arr_y.argmin()
+    #print difference, HM, pos_extremum, arr_y, arr_x, arr_y[pos_extremum:-1]
     
     nearest_above = (np.abs(arr_y[pos_extremum:-1] - HM)).argmin()
     nearest_below = (np.abs(arr_y[0:pos_extremum] - HM)).argmin()
+    #print difference, HM, pos_extremum, nearest_above, nearest_below
     
     FWHM = (np.mean(arr_x[nearest_above + pos_extremum]) - 
             np.mean(arr_x[nearest_below]))
@@ -267,7 +282,7 @@ def gen_spline(x,y):
     """   
     return UnivariateSpline(x, y, k=3, s=0)
 
-def get_doping_profile(CV,area):
+def get_doping_profile(CV,area, voltageName, capacitanceName, currentName):
     """
     Parameters:
         CV: Pandas Dataframe - 2 column dataframe with column names {'voltage', 'capacitance'}
@@ -280,14 +295,14 @@ def get_doping_profile(CV,area):
     
     width, profile = [], []
     for n in range(2,CV.shape[0]):
-        slope = lin_reg(CV.iloc[n-1:n+1,:],'voltage','capacitance')[0]*10**12
+        slope = lin_reg(CV.iloc[n-1:n+1,:],voltageName,capacitanceName)[0]*10**12
         C = CV.iloc[n,1]*10**12
         constant = con.eps_si*con.q*con.eps0*area**2
         if slope == 0:
             N = 0 
         else:
             N = abs((1/slope)*(C**3/(constant)))*10**-24  
-        w = calculate_width(CV['capacitance'][n], area)*10**4
+        w = calculate_width(CV[capacitanceName][n], area)*10**4
         width.append(w) #Reporting in um
         profile.append(N) #Reporting in cm^-3            
     df = pd.DataFrame(columns=['width', 'profile'])
@@ -346,17 +361,23 @@ def isoutlierCV (df, a, p, column, direction):
         This function is used to classify points and outliers or not in order to fit two lines to the data and find the point of intersection. 
     """
     N = round(p * df.shape[0])
-    if direction == 'lr':
-        df_sub = df.sort_values(column, ascending = True).head(N)
-    elif direction == 'rl':
-        df_sub = df.sort_values(column, ascending = False).head(N)
-        df = df.sort_index(axis = 0)
-    else:
-        print("Error")
+    # These have already been sorted?
+    #if direction == 'lr':
+    #    df_sub = df.sort_values(column, ascending = True).head(N)
+    #elif direction == 'rl':
+    #    df_sub = df.sort_values(column, ascending = False).head(N)
+    #    df = df.sort_index(axis = 0)
+    #else:
+    #    print("Error")
+
+    df_sub = df
     mean = df_sub[column].mean()
     std = df_sub[column].std()
     imin = df.index[0]
     imax = df.index[-1]
+    df["Outlier"] = "n"
+    print mean, std, df_sub[column].values, column
+    print "column", column
     
     for i in range (imin, imax):
         x = df.loc[i,column]  
@@ -379,8 +400,8 @@ def lin_reg(df,x,y):
     Note:
         This function performs linear regression on a dataframe 
     """
-    Y = df[y].as_matrix()
-    X = df[x].as_matrix()
+    Y = df[y].values
+    X = df[x].values
     slope, intercept, r_value, p_value, std_err = stats.linregress(X,Y)
     return [slope, intercept]
 
@@ -399,7 +420,7 @@ def manual_der (X, Y):
         #slope, intercept, r_value, p_value, std_err = stats.linregress(X[n:n+1],Y[n:n+1])
         
         if n == 0:
-            slope, intercept, r_value, p_value, std_err = stats.linregress(X[n:n+1],Y[n:n+1])
+            slope, intercept, r_value, p_value, std_err = stats.linregress(X[n:n+2],Y[n:n+2])
         else:
             slope, intercept, r_value, p_value, std_err = stats.linregress(X[n-1:n+1],Y[n-1:n+1])
         der.append(slope)
@@ -437,6 +458,7 @@ def reg_intersect (df1, df2, x, y, estimate = 0 ):
     Note:
         This function determines the point of intersection of two lines described by two dataframes
     """
+    print df1, x, y
     [s1,i1] = lin_reg(df1,x, y)
     [s2,i2] = lin_reg(df2,x, y)
     #return [s1, i1, s2, i2]
@@ -485,7 +507,7 @@ def splitdata(df):
     df_nout = df.loc[df['Outlier'] =='n']
     return(df_out, df_nout)
     
-def storedataCV(file):
+def storedataCV(fileName, uniqueID):
     """
     Parameters:
         df: Pandas Dataframe 
@@ -494,16 +516,19 @@ def storedataCV(file):
     Note:  
         This function stores CV data into a dataframe
     """
-    with open(file, 'r') as f_in:
-        lists = [row for row in csv.reader(f_in, delimiter=',')] 
-        # write a list of lists to a csv file
-    with open("Output.csv", 'w') as f_out:
-        writer = csv.writer(f_out)
-        writer.writerows(lists[3:]) 
-    df = pd.read_csv('Output.csv') #Store data into dataframe 
+    # Find the row that corresponds to the unique ID
+    count = 0
+    with open(fileName) as myfile:
+      for line in myfile:
+        count += 1
+        if line.startswith(uniqueID):
+           break
+
+    df = pd.read_csv(fileName, skiprows = count, sep="\t", header = None) #Store data into dataframe 
+    #df = pd.read_csv(fileName, skiprows = count, sep=",", header = None) #Store data into dataframe 
     return df 
 
-def storedataIV(file):
+def storedataIV(fileName, uniqueID):
     """
     Parameters:
         df: Pandas Dataframe 
@@ -512,7 +537,16 @@ def storedataIV(file):
     Note:  
         This function stores IV data into a dataframe
     """
-    df = pd.read_csv(file, skiprows = 1) #Store data into dataframe 
+
+    # Find the row that corresponds to the unique ID
+    count = 0
+    with open(fileName) as myfile:
+      for line in myfile:
+        count += 1
+        if line.startswith(uniqueID):
+           break
+
+    df = pd.read_csv(fileName, skiprows = count, sep="\t", header = None) #Store data into dataframe 
     return df 
 
 def setPlotStyle():
@@ -548,11 +582,11 @@ def setPlotStyle():
     plt.rcParams['legend.fontsize'] = 20
 
 
-def tablebvol(dest,bvol, column, sheet):
+def tablebreakdownVol(dest,breakdownVol, column, sheet):
     """
     Parameters:
         dest: String - path of excel file 
-        bvol: Float - Breakdown voltage value 
+        breakdownVol: Float - Breakdown voltage value 
         column: String - Name of excel column to store data 
         sheet: String - Name of excel sheet to store data 
     Return:
@@ -565,12 +599,12 @@ def tablebvol(dest,bvol, column, sheet):
     #Setting working sheet
     ws = wb.get_sheet_by_name(sheet)   
     #Storing in next open cell in the column
-    nextopen(bvol,column,ws)
+    nextopen(breakdownVol,column,ws)
     #ws['B' + str(3)] = 2
     wb.save(dest)
 
 #Outdated Functions 
-def calcbvol(df,x, y): 
+def calcbreakdownVol(df,x, y): 
     """
     Parameters:
         df: Pandas dataframe 
@@ -578,13 +612,13 @@ def calcbvol(df,x, y):
         y: String - name of y column in df (Current)
 
     Returns:
-        bvol: integer - Breakdown Voltage 
+        breakdownVol: integer - Breakdown Voltage 
 
     Note: 
         This function does not calculate breakdown voltage well
     """
-    x = df[x].as_matrix()
-    y = (df[y].as_matrix())
+    x = df[x].values
+    y = df[y].values
     frst_der = gen_der(gen_spline(x,y))
     scnd_der = gen_der(gen_der(gen_spline(x,y)))
     thrd_der = gen_der(scnd_der)
@@ -595,11 +629,11 @@ def calcbvol(df,x, y):
     i = -1 
     while dupli['y'].iloc[i] == dupli['y'].iloc[i-1]:
         index = (df2.shape[0]-1)+(i-1)
-        bvol = (df2['x'].iloc[index])
+        breakdownVol = (df2['x'].iloc[index])
         i = i-1
         if i < -10: 
             break
-    return bvol
+    return breakdownVol
 
 
         

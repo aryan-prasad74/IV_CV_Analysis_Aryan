@@ -27,8 +27,8 @@ for n in range(0, len(wafers)):
         filedir = waferdir + "/"+filelist[i]
         impathIV = "IV_plots/"+wafers[n] + "/" + filelist[i][:-4] + ".png" #MODIFY FOR USER (where do you want to store the files)
 
-        fun.tablebvol(xlpath,wafers[n],'A', 'Breakdown Voltage')
-        fun.tablebvol(xlpath, filelist[i],'B', 'Breakdown Voltage')
+        fun.tablebreakdownVol(xlpath,wafers[n],'A', 'Breakdown Voltage')
+        fun.tablebreakdownVol(xlpath, filelist[i],'B', 'Breakdown Voltage')
 
 
 
