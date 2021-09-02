@@ -20,6 +20,7 @@ from scipy.optimize import fsolve
 import seaborn as sns
 from scipy.interpolate import UnivariateSpline
 from openpyxl import load_workbook
+from sklearn.linear_model import LinearRegression
 
 """
 Functions
@@ -136,7 +137,6 @@ def dataplot(df, x, y,image_path, log, xlabel, ylabel, iden = "None", gaindeplvo
     plt.figure(figsize=(12,8)) 
     plt.plot(df[x][1:], df[y][1:], '-')
     if log == "log":
-        print("Log is working")
         plt.xscale('log')
     if log == "ylog":
         plt.yscale('log')
@@ -144,11 +144,10 @@ def dataplot(df, x, y,image_path, log, xlabel, ylabel, iden = "None", gaindeplvo
         plt.xlim(0,5)
     if iden == "invCV":
         plt.axvline(gaindeplvol, linestyle = '--', color = 'forestgreen', label = 'Gain Depl Vol: '+ str(round(gaindeplvol,1)))
-        plt.axvline(totdeplvol, linestyle = '--', color = 'darkorchid', label = 'Total Depl Vol: '+ str(round(totdeplvol,1)))
-        plt.legend()
+        #plt.axvline(totdeplvol, linestyle = '--', color = 'darkorchid', label = 'Total Depl Vol: '+ str(round(totdeplvol,1)))
     if iden == "IV":
         plt.axvline(breakdownVol, linestyle = '--', color = 'k', alpha = 0.5, label = 'Breakdown V: '+ str(round(breakdownVol,1)) + " V")
-        plt.legend()
+    plt.legend()
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     plt.savefig(image_path)
@@ -179,8 +178,9 @@ def dataplotDPW(df, x, y,image_path, log, xlabel, ylabel, gainwidth, gainpeak,  
     plt.figure(figsize=(12,8)) 
     plt.plot(df[x], df[y], '-')
     if log == "log":
-        print("Log is working")
         plt.xscale('log')
+    if log == "ylog":
+        plt.yscale('log')
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     plt.vlines(df[x].max(), df[y].min(), df[y].max() + 0.2*(df[y].max()), 'darkorchid', linestyles = "dashed", label = "Total Depth: "+ str(round(df[x].max(),2)) + r"$ \mu m $")
@@ -282,7 +282,7 @@ def gen_spline(x,y):
     """   
     return UnivariateSpline(x, y, k=3, s=0)
 
-def get_doping_profile(CV,area, voltageName, capacitanceName, currentName):
+def get_doping_profile(CV,area, voltageName, capacitanceName):
     """
     Parameters:
         CV: Pandas Dataframe - 2 column dataframe with column names {'voltage', 'capacitance'}
@@ -360,15 +360,17 @@ def isoutlierCV (df, a, p, column, direction):
     Note:
         This function is used to classify points and outliers or not in order to fit two lines to the data and find the point of intersection. 
     """
-    N = round(p * df.shape[0])
-    # These have already been sorted?
-    #if direction == 'lr':
-    #    df_sub = df.sort_values(column, ascending = True).head(N)
-    #elif direction == 'rl':
-    #    df_sub = df.sort_values(column, ascending = False).head(N)
-    #    df = df.sort_index(axis = 0)
-    #else:
-    #    print("Error")
+    # Trying to find where the linear fit starts breaking down
+    # Basically looking for when the prediction doesn't fit the lowest point that is being fit by a lot more than it doesn't fit the other points
+    for i in range(len(df[column].values)-3, 0, -1):
+      slope, intercept, r_value, p_value, std_err = stats.linregress(df[0].values[i:len(df[column].values)], df[column].values[i:len(df[column].values)])
+      predictions = intercept + slope*df[0].values
+      mymean =  (abs((df[column].values[i:len(df[column].values)]-predictions[i:len(df[column].values)] )/ df[column].values[i:len(df[column].values)])).mean()
+      if (abs((df[column].values[i:len(df[column].values)]-predictions[i:len(df[column].values)] )/ df[column].values[i:len(df[column].values)]))[0] > 5*mymean:
+         break
+       
+    print i, df[0].values[i]
+    ibreakdown = i+1
 
     df_sub = df
     mean = df_sub[column].mean()
@@ -376,15 +378,12 @@ def isoutlierCV (df, a, p, column, direction):
     imin = df.index[0]
     imax = df.index[-1]
     df["Outlier"] = "n"
-    print mean, std, df_sub[column].values, column
-    print "column", column
     
-    for i in range (imin, imax):
-        x = df.loc[i,column]  
-        if (mean-a*std) <= x and x<= (mean + a*std):
-            df.loc[i, "Outlier"] = 'y'
-        else:
-            df.loc[i,"Outlier"] = 'n'
+    for i in range(ibreakdown, len(df[column].values)):
+        df.loc[i, "Outlier"] = 'y'
+    for i in range(0, ibreakdown-3):
+        df.loc[i, "Outlier"] = 'm'
+   
     return df
 
 def lin_reg(df,x,y):
@@ -458,7 +457,7 @@ def reg_intersect (df1, df2, x, y, estimate = 0 ):
     Note:
         This function determines the point of intersection of two lines described by two dataframes
     """
-    print df1, x, y
+    #print df1, x, y
     [s1,i1] = lin_reg(df1,x, y)
     [s2,i2] = lin_reg(df2,x, y)
     #return [s1, i1, s2, i2]
