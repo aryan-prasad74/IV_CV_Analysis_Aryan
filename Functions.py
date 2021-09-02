@@ -369,7 +369,6 @@ def isoutlierCV (df, a, p, column, direction):
       if (abs((df[column].values[i:len(df[column].values)]-predictions[i:len(df[column].values)] )/ df[column].values[i:len(df[column].values)]))[0] > 5*mymean:
          break
        
-    print i, df[0].values[i]
     ibreakdown = i+1
 
     df_sub = df
@@ -506,7 +505,7 @@ def splitdata(df):
     df_nout = df.loc[df['Outlier'] =='n']
     return(df_out, df_nout)
     
-def storedataCV(fileName, uniqueID):
+def storedataCV(fileName, uniqueID, separator):
     """
     Parameters:
         df: Pandas Dataframe 
@@ -523,11 +522,10 @@ def storedataCV(fileName, uniqueID):
         if line.startswith(uniqueID):
            break
 
-    df = pd.read_csv(fileName, skiprows = count, sep="\t", header = None) #Store data into dataframe 
-    #df = pd.read_csv(fileName, skiprows = count, sep=",", header = None) #Store data into dataframe 
+    df = pd.read_csv(fileName, skiprows = count, sep=separator, header = None) #Store data into dataframe 
     return df 
 
-def storedataIV(fileName, uniqueID):
+def storedataIV(fileName, uniqueID, separator):
     """
     Parameters:
         df: Pandas Dataframe 
@@ -545,7 +543,7 @@ def storedataIV(fileName, uniqueID):
         if line.startswith(uniqueID):
            break
 
-    df = pd.read_csv(fileName, skiprows = count, sep="\t", header = None) #Store data into dataframe 
+    df = pd.read_csv(fileName, skiprows = count, sep=separator, header = None) #Store data into dataframe 
     return df 
 
 def setPlotStyle():
