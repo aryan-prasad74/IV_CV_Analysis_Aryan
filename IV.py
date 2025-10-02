@@ -44,13 +44,15 @@ fileTitles = []
 
 if options.fileName:
   files = [options.fileName]
-  fileTitles = [options.fileName[:options.fileName.rfind(".")]]
+  # Use only the filename (no directories) and remove the extension
+  fileTitles = [os.path.splitext(os.path.basename(options.fileName))[0]]
 elif options.fileList:
-  dfFiles = pd.read_csv(options.fileList, sep=" ", header = None) #Store data into dataframe 
-  files = dfFiles[0]
+  dfFiles = pd.read_csv(options.fileList, sep=" ", header=None)
+  # Prepend the folder path to each filename
+  files = ["Measurement_CSVs/" + f for f in dfFiles[0]]
   fileTitles = dfFiles[1]
 else:
-  print "No input files"
+  print("No input files")
 
 try:
   os.mkdir(options.outdir)
@@ -63,7 +65,7 @@ for cfile, ctitle in zip(files, fileTitles):
   df = fun.cleanupIV(df, options.voltageColumn, options.currentColumn)
   breakdownVol = fun.breakdownVol(df, options.voltageColumn, options.currentColumn)
 
-  outfileName = options.outdir + "/" + ctitle + options.outfile
+  outfileName = os.path.join(options.outdir, ctitle + options.outfile)
   fun.dataplot(df, options.voltageColumn, options.currentColumn, outfileName, 'ylog', 'Voltage [V]', 'Current [A]', iden = "IV", breakdownVol = breakdownVol)
 
 #Storing data in an excel file 

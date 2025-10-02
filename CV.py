@@ -44,11 +44,11 @@ if options.fileName:
   files = [options.fileName]
   fileTitles = [options.fileName[:options.fileName.rfind(".")]]
 elif options.fileList:
-  dfFiles = pd.read_csv(options.fileList, sep=" ", header = None) #Store data into dataframe 
-  files = dfFiles[0]
+  dfFiles = pd.read_csv(options.fileList, sep=" ", header=None)
+  files = ["Measurement_CSVs/" + f for f in dfFiles[0]]  # prepend folder path
   fileTitles = dfFiles[1]
 else:
-  print "No input files"
+  print("No input files")
 
 try:
   os.mkdir(options.outdir)
@@ -56,22 +56,25 @@ except:
   "Directory already exists"
 
 
-impathCV = options.impathCV
-impathDPW = options.impathDPW
-impathDPWcut = options.impathDPWcut
-impathCVinv = options.impathCVinv
-delim = options.delim
+#impathCV = options.impathCV
+#impathDPW = options.impathDPW
+#impathDPWcut = options.impathDPWcut
+#impathCVinv = options.impathCVinv
+#delim = options.delim
 xlpath = options.xlpath
 
 fun.setPlotStyle() #Setting format of the graph
 
 
+
 ## Run over all the different files
 for cfile, ctitle in zip(files, fileTitles):
   df = fun.storedataCV(cfile, options.rowName, separator=options.separatorString)
-  x = df.columns[0]
-  y = df.columns[2]
     
+  # Use numeric column indices from options
+  x = options.voltageColumn
+  y = options.capacitanceColumn
+
   #CV
   df = fun.cleanupCV(df, x, y)
   outpathCV = options.outdir + "/" + ctitle + "_CV.png"
@@ -85,7 +88,8 @@ for cfile, ctitle in zip(files, fileTitles):
   CV['inverse capacitance'] = CV.apply(lambda row: row[options.capacitanceColumn]**-2, axis = 1)
 
 
-  outlr = fun.isoutlierCV(CV, 3, 0.8, 'inverse capacitance', 'lr')
+  outlr = fun.isoutlierCV(CV, 3, 0.8, 'inverse capacitance', 'lr', x)
+
   dflr_out = fun.splitdata(outlr)[0]
   dflr_nout = fun.splitdata(outlr)[1]
 

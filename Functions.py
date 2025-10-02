@@ -219,7 +219,33 @@ def dataplotIV(df,xd,yd,hued, impathIV, breakdownVol):
     g.set_axis_labels('Voltage (V)', 'Current (A)')
     g.savefig(impathIV)
 
-def FWHM(arr_x,arr_y):
+# def FWHM(arr_x,arr_y):
+#     """
+#     Parameters:
+#         arr_x: Numpy Array - x array of gaussian fit 
+#         arr_y: Numpy Array - y array of gaussian fit 
+#     Return:
+#         FWHM: float - full width half maximum 
+#     Note:
+#         This function returns the full width half maximum of a Gaussian Fit 
+
+#     """
+#     difference = max(arr_y) - min(arr_y)
+#     HM = difference / 2
+    
+#     #pos_extremum = arr_y.argmax()  # or in your case: arr_y.argmin()
+#     pos_extremum = arr_y.argmin()  # or in your case: arr_y.argmin()
+#     #print difference, HM, pos_extremum, arr_y, arr_x, arr_y[pos_extremum:-1]
+    
+#     nearest_above = (np.abs(arr_y[pos_extremum:-1] - HM)).argmin()
+#     nearest_below = (np.abs(arr_y[0:pos_extremum] - HM)).argmin()
+#     #print difference, HM, pos_extremum, nearest_above, nearest_below
+    
+#     FWHM = (np.mean(arr_x[nearest_above + pos_extremum]) - 
+#             np.mean(arr_x[nearest_below]))
+#     return FWHM
+
+def FWHM(arr_x, arr_y):
     """
     Parameters:
         arr_x: Numpy Array - x array of gaussian fit 
@@ -228,22 +254,27 @@ def FWHM(arr_x,arr_y):
         FWHM: float - full width half maximum 
     Note:
         This function returns the full width half maximum of a Gaussian Fit 
-
     """
     difference = max(arr_y) - min(arr_y)
     HM = difference / 2
     
-    #pos_extremum = arr_y.argmax()  # or in your case: arr_y.argmin()
-    pos_extremum = arr_y.argmin()  # or in your case: arr_y.argmin()
-    #print difference, HM, pos_extremum, arr_y, arr_x, arr_y[pos_extremum:-1]
+    pos_extremum = arr_y.argmin()  # position of min
     
-    nearest_above = (np.abs(arr_y[pos_extremum:-1] - HM)).argmin()
-    nearest_below = (np.abs(arr_y[0:pos_extremum] - HM)).argmin()
-    #print difference, HM, pos_extremum, nearest_above, nearest_below
+    # Handle edge case if pos_extremum is 0
+    if pos_extremum == 0:
+        nearest_below = 0
+    else:
+        nearest_below = (np.abs(arr_y[0:pos_extremum] - HM)).argmin()
     
-    FWHM = (np.mean(arr_x[nearest_above + pos_extremum]) - 
-            np.mean(arr_x[nearest_below]))
+    # Handle edge case if pos_extremum is last index
+    if pos_extremum >= len(arr_y) - 1:
+        nearest_above = pos_extremum
+    else:
+        nearest_above = (np.abs(arr_y[pos_extremum:] - HM)).argmin() + pos_extremum
+
+    FWHM = (np.mean(arr_x[nearest_above]) - np.mean(arr_x[nearest_below]))
     return FWHM
+
 
 def findIntersection(s1,in1,s2, in2, estimate = 0):
     """
@@ -329,7 +360,7 @@ def isoutlier(df, a, p, column, start = 0):
     #Picking a small subset of datapoints 
     #N = round(p * df.shape[0])
     
-    df_sub = df.sort_values(column).loc[strt_idx:end_idx] 
+    df_sub = df.sort_values(column).loc[start_idx:end_idx] 
     df = df.loc[turn_on_curve:]
     mean = df_sub[column].mean()
     std = df_sub[column].std()
@@ -347,7 +378,45 @@ def isoutlier(df, a, p, column, start = 0):
     df['Outlier'].dropna()
     return df
 
-def isoutlierCV (df, a, p, column, direction):
+# def isoutlierCV (df, a, p, column, direction):
+#     """
+#     Parameters:
+#         df: Pandas dataframe 
+#         a: Integer - number of standard deviations to determine outlier 
+#         p: Float - fraction of data to be used to determine mean and standard deviation 
+#         column: String - name of the column for the current 
+#         direction: {'lr', 'rl'} - Direction to scan for outliers (left to right or right to left)
+#     Return:
+#         df: Pandas Dataframe 
+#     Note:
+#         This function is used to classify points and outliers or not in order to fit two lines to the data and find the point of intersection. 
+#     """
+#     # Trying to find where the linear fit starts breaking down
+#     # Basically looking for when the prediction doesn't fit the lowest point that is being fit by a lot more than it doesn't fit the other points
+#     for i in range(len(df[column].values)-3, 0, -1):
+#       slope, intercept, r_value, p_value, std_err = stats.linregress(df[0].values[i:len(df[column].values)], df[column].values[i:len(df[column].values)])
+#       predictions = intercept + slope*df[0].values
+#       mymean =  (abs((df[column].values[i:len(df[column].values)]-predictions[i:len(df[column].values)] )/ df[column].values[i:len(df[column].values)])).mean()
+#       if (abs((df[column].values[i:len(df[column].values)]-predictions[i:len(df[column].values)] )/ df[column].values[i:len(df[column].values)]))[0] > 5*mymean:
+#          break
+       
+#     ibreakdown = i+1
+
+#     df_sub = df
+#     mean = df_sub[column].mean()
+#     std = df_sub[column].std()
+#     imin = df.index[0]
+#     imax = df.index[-1]
+#     df["Outlier"] = "n"
+    
+#     for i in range(ibreakdown, len(df[column].values)):
+#         df.loc[i, "Outlier"] = 'y'
+#     for i in range(0, ibreakdown-3):
+#         df.loc[i, "Outlier"] = 'm'
+   
+#     return df
+
+def isoutlierCV(df, a, p, column, direction, xcol):
     """
     Parameters:
         df: Pandas dataframe 
@@ -355,6 +424,7 @@ def isoutlierCV (df, a, p, column, direction):
         p: Float - fraction of data to be used to determine mean and standard deviation 
         column: String - name of the column for the current 
         direction: {'lr', 'rl'} - Direction to scan for outliers (left to right or right to left)
+        xcol: String or int - name or index of the voltage column
     Return:
         df: Pandas Dataframe 
     Note:
@@ -363,11 +433,14 @@ def isoutlierCV (df, a, p, column, direction):
     # Trying to find where the linear fit starts breaking down
     # Basically looking for when the prediction doesn't fit the lowest point that is being fit by a lot more than it doesn't fit the other points
     for i in range(len(df[column].values)-3, 0, -1):
-      slope, intercept, r_value, p_value, std_err = stats.linregress(df[0].values[i:len(df[column].values)], df[column].values[i:len(df[column].values)])
-      predictions = intercept + slope*df[0].values
-      mymean =  (abs((df[column].values[i:len(df[column].values)]-predictions[i:len(df[column].values)] )/ df[column].values[i:len(df[column].values)])).mean()
-      if (abs((df[column].values[i:len(df[column].values)]-predictions[i:len(df[column].values)] )/ df[column].values[i:len(df[column].values)]))[0] > 5*mymean:
-         break
+        slope, intercept, r_value, p_value, std_err = stats.linregress(
+            df[xcol].values[i:len(df[column].values)],
+            df[column].values[i:len(df[column].values)]
+        )
+        predictions = intercept + slope*df[xcol].values
+        mymean = (abs((df[column].values[i:len(df[column].values)] - predictions[i:len(df[column].values)]) / df[column].values[i:len(df[column].values)])).mean()
+        if (abs((df[column].values[i:len(df[column].values)] - predictions[i:len(df[column].values)]) / df[column].values[i:len(df[column].values)]))[0] > 5*mymean:
+            break
        
     ibreakdown = i+1
 
@@ -384,6 +457,7 @@ def isoutlierCV (df, a, p, column, direction):
         df.loc[i, "Outlier"] = 'm'
    
     return df
+
 
 def lin_reg(df,x,y):
     """
