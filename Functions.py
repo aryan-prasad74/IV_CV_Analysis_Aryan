@@ -707,4 +707,30 @@ def calcbreakdownVol(df,x, y):
     return breakdownVol
 
 
-        
+# Average IV curves from multiple CSVs (Assumes same V step size, takes overlapping region only)
+def average_IV_csvs(dfs, voltage_col, current_col):
+    """
+    Parameters:
+        dfs: list of pandas DataFrames, all with the same voltage and current columns
+        voltage_col: int or str, column index/name for voltage
+        current_col: int or str, column index/name for current
+    Returns:
+        V_avg: numpy array of averaged voltages (over overlapping range)
+        I_avg: numpy array of averaged currents
+    """
+    # Find overlapping voltage range
+    v_min = max(df[voltage_col].min() for df in dfs)
+    v_max = min(df[voltage_col].max() for df in dfs)
+
+    # Create voltage points for averaging (use finest resolution across all)
+    V_common = np.unique(np.concatenate([df[voltage_col].values for df in dfs]))
+    V_common = V_common[(V_common >= v_min) & (V_common <= v_max)]
+
+    # Interpolate each curve to common voltage points
+    I_interp_list = []
+    for df in dfs:
+        I_interp = np.interp(V_common, df[voltage_col], df[current_col])
+        I_interp_list.append(I_interp)
+
+    I_avg = np.mean(I_interp_list, axis=0)
+    return V_common, I_avg
