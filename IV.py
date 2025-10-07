@@ -2,9 +2,8 @@
 """
 Created on Mon Jul 15 15:11:15 2019
 
-This is a module for plotting IV curves and determining the breakdown voltage. All user specific values (ex. file path, image path etc.) can be specified using optional parsers.  
-@author: Sneha Ramshanker 
-
+This module plots IV curves and determines breakdown voltage.
+One plot per sensor type, with averaged curves per sensor ID.
 """
 
 import Functions as fun
@@ -17,123 +16,106 @@ import seaborn as sns
 import os
 import re
 
-
-"""
-Optional Parsing
-"""
-
+# ------------------ Optional Parsing ------------------
 parser = OptionParser()
 parser.add_option("--fileName", type="string", help="Path of file with IV data", dest="fileName", default=None)
 parser.add_option("--fileList", type="string", help="Path of file with list of files/names", dest="fileList", default=None)
-parser.add_option("--outfile",type = "string", help = "Path to store IV plot", default = "test.png")
+parser.add_option("--outfile",type = "string", help = "Path to store IV plot", default = ".png")
 parser.add_option("--outdir",type = "string", help = "Directory where plots should be stored", default = "IVplots")
-parser.add_option("--xlrow", type = "int", help = "What row of the excel file should this data be stored in", dest = "xlrow", default = 2)
+parser.add_option("--xlrow", type = "int", help = "Excel row to store breakdown", dest = "xlrow", default = 2)
 parser.add_option("--xlpath", type = "string", help = "Path of excel file to store results", dest = "xlpath", default = 'Testdata/Breakdown.xlsx')
-parser.add_option("--saveExcel", type = "int", help = "Set to 1 if you want to save the output in an excel file, 0 otherwise", default = 0)
-parser.add_option("--rowName", type="string", help = "A unique string that identifies the row before the data starts", default = "BEGIN")
-parser.add_option("--voltageColumn", type="int", help = "The data column where the voltage is stored", default = 0)
-parser.add_option("--currentColumn", type="int", help = "The data column where the current is stored", default = 2)
-parser.add_option("--separatorString", type="string", help = "The string between data columns to separate them", default = "\t")
+parser.add_option("--saveExcel", type = "int", help = "Set to 1 to save output in Excel, 0 otherwise", default = 0)
+parser.add_option("--rowName", type="string", help = "Unique string identifying row before data starts", default = "BEGIN")
+parser.add_option("--voltageColumn", type="int", help = "Data column where voltage is stored", default = 0)
+parser.add_option("--currentColumn", type="int", help = "Data column where current is stored", default = 2)
+parser.add_option("--separatorString", type="string", help = "String between data columns", default = "\t")
 
 options, arguments = parser.parse_args()
 
-fun.setPlotStyle() #Setting format of the graph
+fun.setPlotStyle()  # Set format of the graph
 
-
-files = []
-fileTitles = []
+# ------------------ Load Files ------------------
+files, fileTitles = [], []
 
 if options.fileName:
-  files = [options.fileName]
-  # Use only the filename (no directories) and remove the extension
-  fileTitles = [os.path.splitext(os.path.basename(options.fileName))[0]]
+    files = [options.fileName]
+    fileTitles = [os.path.splitext(os.path.basename(options.fileName))[0]]
 elif options.fileList:
-  dfFiles = pd.read_csv(options.fileList, sep=" ", header=None)
-  # Prepend the folder path to each filename
-  files = ["Measurement_CSVs/" + f for f in dfFiles[0]]
-  fileTitles = dfFiles[1]
+    dfFiles = pd.read_csv(options.fileList, sep=" ", header=None)
+    files = ["Measurement_CSVs/" + f for f in dfFiles[0]]
+    fileTitles = dfFiles[1]
 else:
-  print("No input files")
+    print("No input files")
 
 try:
-  os.mkdir(options.outdir)
+    os.mkdir(options.outdir)
 except:
-  "Directory already exists"
+    pass
 
-# Helper function to extract sensor code like W3082 from filename
-def get_sensor_code(filename):
-  m = re.search(r'(W\d{4})', filename)
-  if m:
-    return m.group(1)
-  else:
-    return "Unknown"
-
-# for cfile, ctitle in zip(files, fileTitles):
-#   df = fun.storedataIV(cfile, options.rowName, separator=options.separatorString)
-#   df = fun.cleanupIV(df, options.voltageColumn, options.currentColumn)
-#   breakdownVol = fun.breakdownVol(df, options.voltageColumn, options.currentColumn)
-
-#   outfileName = os.path.join(options.outdir, ctitle + options.outfile)
-#   fun.dataplot(df, options.voltageColumn, options.currentColumn, outfileName, 'ylog', 'Voltage [V]', 'Current [A]', iden = "IV", breakdownVol = breakdownVol)
-
-# Group files by sensor code (e.g. W3082)
-sensor_groups = {}
-for cfile, ctitle in zip(files, fileTitles):
-  sensor = get_sensor_code(cfile)
-  if sensor not in sensor_groups:
-    sensor_groups[sensor] = []
-  sensor_groups[sensor].append((cfile, ctitle))
-
-# Helper function to extract sensor code and sub-ID like W3082_05-18
-def get_sensor_subid(filename):
+# ------------------ Helper Functions ------------------
+def get_sensor_info(filename):
     m = re.search(r'(W\d{4})_(\d{2}-\d{2})', filename)
     if m:
-        return f"{m.group(1)}_{m.group(2)}"
+        return m.group(1), m.group(2)
     else:
-        return "Unknown"
+        return "Unknown", "Unknown"
 
-# Group files by sensor and sub-ID
+# Group files by sensor type and sensor ID
 sensor_groups = {}
 for cfile, ctitle in zip(files, fileTitles):
-    sensor_subid = get_sensor_subid(cfile)
-    sensor = sensor_subid.split('_')[0]  # W3082
-    if sensor not in sensor_groups:
-        sensor_groups[sensor] = {}
-    if sensor_subid not in sensor_groups[sensor]:
-        sensor_groups[sensor][sensor_subid] = []
-    sensor_groups[sensor][sensor_subid].append(cfile)
+    sensor_type, sensor_id = get_sensor_info(cfile)
+    if sensor_type not in sensor_groups:
+        sensor_groups[sensor_type] = {}
+    if sensor_id not in sensor_groups[sensor_type]:
+        sensor_groups[sensor_type][sensor_id] = []
+    sensor_groups[sensor_type][sensor_id].append(cfile)
 
-# Loop through each sensor and plot averaged curves for each sub-ID
-for sensor, subid_dict in sensor_groups.items():
+# ------------------ Plotting ------------------
+for sensor_type, id_group in sensor_groups.items():
     plt.figure(figsize=(8,6))
-    for subid, file_list in subid_dict.items():
-        # Load all CSVs for this sub-ID
-        dfs = [fun.storedataIV(f, options.rowName, separator=options.separatorString) for f in file_list]
-        # Compute average curve
-        V_avg, I_avg = fun.average_IV_csvs(dfs, options.voltageColumn, options.currentColumn)
-        # Compute breakdown voltage
-        df_avg = pd.DataFrame({options.voltageColumn: V_avg, options.currentColumn: I_avg})
-        bd_vol = fun.breakdownVol(df_avg, options.voltageColumn, options.currentColumn)
-        # Plot
-        plt.plot(V_avg, I_avg, label=f"{subid}_avg")
-        plt.axvline(bd_vol, linestyle='--', alpha=0.5, label=f"{subid}_BDV: {bd_vol:.1f} V")
+    
+    # Only difference: maroon and purple colors for curves & matching dashed lines
+# Only difference: maroon and bluer purple colors for curves & matching dashed lines
+    curve_colors = ["#384860", "#298c8c93"]
+
+    for i, (sensor_id, file_list) in enumerate(id_group.items()):
+        color = curve_colors[i % len(curve_colors)]
+
+        try:
+            df_avg = fun.average_IV_csvs(file_list, 
+                                         voltage_col=options.voltageColumn, 
+                                         current_col=options.currentColumn, 
+                                         rowName=options.rowName, 
+                                         separator=options.separatorString)
+
+            breakdownVol = fun.breakdownVol(df_avg, options.voltageColumn, options.currentColumn)
+
+        except Exception as e:
+            print(f"Error averaging or calculating Vbd for {sensor_type}_{sensor_id}: {e}")
+            df_avg = fun.storedataIV(file_list[0], options.rowName, separator=options.separatorString)
+            df_avg = fun.cleanupIV(df_avg, options.voltageColumn, options.currentColumn)
+            breakdownVol = fun.breakdownVol(df_avg, options.voltageColumn, options.currentColumn)
+
+        plt.plot(df_avg[options.voltageColumn], df_avg[options.currentColumn], 
+                 color=color, label=f"{sensor_type}_{sensor_id}")
+        
+        plt.axvline(breakdownVol, linestyle='--', color=color, alpha=0.7,
+                    label=f"{sensor_type}_{sensor_id} Vbd: {round(breakdownVol,1)} V")
+
     plt.xlabel("Voltage [V]")
     plt.ylabel("Current [A]")
     plt.yscale("log")
-    plt.title(f"IV Curves for Sensor {sensor}")
+    plt.title(f"IV Curves for Sensor Type {sensor_type}")
     plt.legend(loc="best", fontsize="small", ncol=2)
     plt.grid(True)
     plt.tight_layout()
-    outfileName = os.path.join(options.outdir, f"{sensor}_IV_avg.png")
+
+    outfileName = os.path.join(options.outdir, f"{sensor_type}_IV.png")
     plt.savefig(outfileName)
     plt.close()
 
-
-
-#Storing data in an excel file 
+# ------------------ Save Excel ------------------
 if options.saveExcel:
-  xlrow = options.xlrow 
-  xlpath = options.xlpath
-  fun.tablebreakdownVol(xlpath, breakdownVol ,'C', 'Breakdown Voltage')
-
-
+    xlrow = options.xlrow
+    xlpath = options.xlpath
+    fun.tablebreakdownVol(xlpath, breakdownVol ,'C', 'Breakdown Voltage')

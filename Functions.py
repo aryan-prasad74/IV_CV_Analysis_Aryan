@@ -708,29 +708,57 @@ def calcbreakdownVol(df,x, y):
 
 
 # Average IV curves from multiple CSVs (Assumes same V step size, takes overlapping region only)
-def average_IV_csvs(dfs, voltage_col, current_col):
+def average_IV_csvs(file_list, voltage_col=1, current_col=2, rowName="BEGIN", separator=","):
     """
-    Parameters:
-        dfs: list of pandas DataFrames, all with the same voltage and current columns
-        voltage_col: int or str, column index/name for voltage
-        current_col: int or str, column index/name for current
+    Reads multiple IV CSV files and returns a DataFrame of the averaged curve.
+    Only overlapping voltage points are used (rounded to 0.1 V for alignment).
+    
+    Args:
+        file_list (list of str): list of CSV file paths
+        voltage_col (int): column index of voltage
+        current_col (int): column index of current
+        rowName (str): row label before data starts (ignored if CSV has no header)
+        separator (str): CSV separator
+
     Returns:
-        V_avg: numpy array of averaged voltages (over overlapping range)
-        I_avg: numpy array of averaged currents
+        pd.DataFrame: DataFrame with columns [Voltage, Current_avg]
     """
-    # Find overlapping voltage range
-    v_min = max(df[voltage_col].min() for df in dfs)
-    v_max = min(df[voltage_col].max() for df in dfs)
-
-    # Create voltage points for averaging (use finest resolution across all)
-    V_common = np.unique(np.concatenate([df[voltage_col].values for df in dfs]))
-    V_common = V_common[(V_common >= v_min) & (V_common <= v_max)]
-
-    # Interpolate each curve to common voltage points
-    I_interp_list = []
+    import pandas as pd
+    import numpy as np
+    
+    dfs = []
+    for f in file_list:
+        df = pd.read_csv(f, sep=separator, header=None, skiprows=lambda x: rowName in str(x))
+        df = df[[voltage_col, current_col]].dropna()
+        df.columns = ['Voltage', 'Current']
+        
+        # Convert columns to numeric
+        df['Voltage'] = pd.to_numeric(df['Voltage'], errors='coerce')
+        df['Current'] = pd.to_numeric(df['Current'], errors='coerce')
+        df = df.dropna(subset=['Voltage', 'Current'])
+        
+        # Round voltage to 0.1 V to align curves
+        df['Voltage'] = df['Voltage'].round(1)
+        dfs.append(df)
+    
+    # Find overlapping voltage points
+    common_voltages = set(dfs[0]['Voltage'])
+    for df in dfs[1:]:
+        common_voltages &= set(df['Voltage'])
+    common_voltages = sorted(common_voltages)
+    
+    # Interpolate each curve to common voltages
+    interpolated_currents = []
     for df in dfs:
-        I_interp = np.interp(V_common, df[voltage_col], df[current_col])
-        I_interp_list.append(I_interp)
-
-    I_avg = np.mean(I_interp_list, axis=0)
-    return V_common, I_avg
+        interp_current = np.interp(common_voltages, df['Voltage'], df['Current'])
+        interpolated_currents.append(interp_current)
+    
+    # Average currents
+    current_avg = np.mean(interpolated_currents, axis=0)
+    
+    df_avg = pd.DataFrame({
+        voltage_col: common_voltages,
+        current_col: current_avg
+    })
+    
+    return df_avg
