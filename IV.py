@@ -74,14 +74,16 @@ for cfile, ctitle in zip(files, fileTitles):
 for sensor_type, id_group in sensor_groups.items():
     plt.figure(figsize=(8,6))
     
-    # Only difference: maroon and purple colors for curves & matching dashed lines
-# Only difference: maroon and bluer purple colors for curves & matching dashed lines
-    curve_colors = ["#384860", "#298c8c93"]
+    curve_colors = ["#384860", "#298c8c93"]  # Modify colors here if desired
 
     for i, (sensor_id, file_list) in enumerate(id_group.items()):
         color = curve_colors[i % len(curve_colors)]
 
+        breakdownVol = None
+        df_avg = None
+
         try:
+            # Attempt to average all runs
             df_avg = fun.average_IV_csvs(file_list, 
                                          voltage_col=options.voltageColumn, 
                                          current_col=options.currentColumn, 
@@ -92,15 +94,34 @@ for sensor_type, id_group in sensor_groups.items():
 
         except Exception as e:
             print(f"Error averaging or calculating Vbd for {sensor_type}_{sensor_id}: {e}")
-            df_avg = fun.storedataIV(file_list[0], options.rowName, separator=options.separatorString)
-            df_avg = fun.cleanupIV(df_avg, options.voltageColumn, options.currentColumn)
-            breakdownVol = fun.breakdownVol(df_avg, options.voltageColumn, options.currentColumn)
 
-        plt.plot(df_avg[options.voltageColumn], df_avg[options.currentColumn], 
-                 color=color, label=f"{sensor_type}_{sensor_id}")
-        
-        plt.axvline(breakdownVol, linestyle='--', color=color, alpha=0.7,
-                    label=f"{sensor_type}_{sensor_id} Vbd: {round(breakdownVol,1)} V")
+            # Fallback: use the first run (_1) of that sensor
+            sensor_run1 = None
+            for f in file_list:
+                # Look for _1 after sensor ID
+                if re.search(rf"{sensor_type}_{sensor_id}_1\b", f):
+                    sensor_run1 = f
+                    break
+
+            if sensor_run1:
+                try:
+                    df_avg = fun.storedataIV(sensor_run1, options.rowName, separator=options.separatorString)
+                    breakdownVol = fun.breakdownVol(df_avg, options.voltageColumn, options.currentColumn)
+                    print(f"  Using fallback run _1 file for {sensor_type}_{sensor_id}: {sensor_run1}")
+                except Exception as e2:
+                    print(f"  Fallback _1 file also failed for {sensor_type}_{sensor_id}: {e2}")
+                    continue
+            else:
+                print(f"  No _1 run file found for {sensor_type}_{sensor_id}, skipping...")
+                continue
+
+        # Plot the curve and breakdown voltage if we have data
+        if df_avg is not None:
+            plt.plot(df_avg[options.voltageColumn], df_avg[options.currentColumn], 
+                     color=color, label=f"{sensor_type}_{sensor_id}")
+            if breakdownVol is not None:
+                plt.axvline(breakdownVol, linestyle='--', color=color, alpha=0.7,
+                            label=f"{sensor_type}_{sensor_id} Vbd: {round(breakdownVol,1)} V")
 
     plt.xlabel("Voltage [V]")
     plt.ylabel("Current [A]")

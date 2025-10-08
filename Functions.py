@@ -25,34 +25,71 @@ from sklearn.linear_model import LinearRegression
 """
 Functions
 """
-def breakdownVol(df, x, y, thresh = 0.9995):
+import numpy as np
+from scipy import stats
+
+def breakdownVol(df, x, y, thresh=0.9995):
     """
+    Determine breakdown voltage from IV data using first and second derivatives.
+
     Parameters:
-        df: Pandas dataframe 
+        df: Pandas dataframe
         x: String - name of x column in df (voltage)
-        y: String - name of y column in df (capacitance)
-    Optional Parameters: 
-        thresh: Float - r squared threshold value
+        y: String - name of y column in df (current or capacitance)
+        thresh: Float - R^2 threshold for linearity
+
     Returns:
-        breakdownVol: Float - Breakdown Voltage 
-    Note: 
-        This function determines the breakdown by calculation the point where the relationship between the first and second derivative becomes extremely linear. 
+        breakdownVol: Float - Estimated breakdown voltage
     """
-    frst_der = manual_der(df[x].values, df[y].values)
-    scnd_der = manual_der(df[x].values, frst_der)
-    
-    r_value = 1
+    # Compute derivatives and convert to numpy arrays
+    frst_der = np.array(manual_der(df[x].values, df[y].values))
+    scnd_der = np.array(manual_der(df[x].values, frst_der))
+
+    # Replace non-positive values with small number
+    frst_der[frst_der <= 0] = 1e-12
+    scnd_der[scnd_der <= 0] = 1e-12
+
+    r_value = 1.0
     N = 2
-    while round(r_value,4) >= thresh: #Threshold for linearity
+    max_N = len(frst_der)
+    
+    while round(r_value, 4) >= thresh and N <= max_N:
         X = np.log(frst_der[-N:])
         Y = np.log(scnd_der[-N:])
-        slope, intercept, r_value, p_value, std_err = stats.linregress(X,Y)
-        N = N+1
-          
+        slope, intercept, r_value, p_value, std_err = stats.linregress(X, Y)
+        N += 1
+
+    # Ensure N does not exceed array length
+    N = min(N-1, max_N)
     voltage = df[x].values
-    breakdownVol = voltage[-N+1]
+    breakdownVol = voltage[-N]
+    
     return breakdownVol
-        
+
+def safe_breakdownVol(df, x_col, y_col): # Small Value Replacement for zero or negative logarithmns (Set to 1e-12)
+    """
+    Calls the original breakdownVol function but avoids log warnings.
+    If a RuntimeWarning occurs, replaces problematic values with 1e-12 and retries.
+    """
+    import warnings
+    import numpy as np
+    
+    # Temporarily ignore RuntimeWarnings
+    warnings.filterwarnings("error")  # turn warnings into exceptions
+    try:
+        bd = breakdownVol(df, x_col, y_col)
+    except RuntimeWarning:
+        # Make a copy of the current column to avoid modifying original
+        df_copy = df.copy()
+        # Replace non-positive values in the current column with a small positive number
+        df_copy.iloc[:, y_col] = df_copy.iloc[:, y_col].apply(lambda v: v if v > 0 else 1e-12)
+        # Retry calculation
+        bd = breakdownVol(df_copy, x_col, y_col)
+    finally:
+        warnings.filterwarnings("default")  # restore warning behavior
+
+    return bd
+
 def calculate_width(C, A):
     """
     Parameters:
@@ -89,28 +126,49 @@ def cleanupCV(df, x, y):
     return df 
 
 def cleanupIV(df, x, y):
-    """
-    Parameters:
-        df: Pandas dataframe 
-        x: String - name of x column in df (voltage)
-        y: String - name of y column in df (capacitance)
-    Returns:
-        dfclean: Pandas dataframe 
-    Note: 
-        The data is cleaned up so that it can be stored nicely in a dataframe. The cleanup proceduce is specific to the format of the textfile the IV data is stored in. 
-    """
-    df = df.iloc[0:len(df)-1]
+    # Make an explicit copy to avoid SettingWithCopyWarning
+    df = df.copy()
 
-    df[x] = pd.to_numeric(df[x])
-    df.loc[y] = pd.to_numeric(df.loc[:,y])
+    # Convert both columns to numeric, invalid entries become NaN
+    df.iloc[:, x] = pd.to_numeric(df.iloc[:, x], errors='coerce')
+    df.iloc[:, y] = pd.to_numeric(df.iloc[:, y], errors='coerce')
 
-    # This complains, but I'm not sure what to do about it.
-    df[x] = abs(df[x])
-    df[y] = abs(df[y])
+    # Take absolute value
+    df.iloc[:, x] = df.iloc[:, x].abs()
+    df.iloc[:, y] = df.iloc[:, y].abs()
 
-    df["Outlier"] = ""
-    dfclean = (df.dropna(subset = [x, y]))
-    return dfclean  
+    # Drop any rows with NaN (non-numeric or empty)
+    df = df.dropna(subset=[df.columns[x], df.columns[y]]).reset_index(drop=True)
+
+    # Round for consistency
+    df.iloc[:, x] = df.iloc[:, x].round(1)
+    df.iloc[:, y] = df.iloc[:, y].round(12)
+
+    return df
+
+# def cleanupIV(df, x, y):
+#     """
+#     Parameters:
+#         df: Pandas dataframe 
+#         x: String - name of x column in df (voltage)
+#         y: String - name of y column in df (capacitance)
+#     Returns:
+#         dfclean: Pandas dataframe 
+#     Note: 
+#         The data is cleaned up so that it can be stored nicely in a dataframe. The cleanup proceduce is specific to the format of the textfile the IV data is stored in. 
+#     """
+#     df = df.iloc[0:len(df)-1]
+
+#     df[x] = pd.to_numeric(df[x])
+#     df.loc[y] = pd.to_numeric(df.loc[:,y])
+
+#     # This complains, but I'm not sure what to do about it. - FIXED! (In new version)
+#     df[x] = abs(df[x])
+#     df[y] = abs(df[y])
+
+#     df["Outlier"] = ""
+#     dfclean = (df.dropna(subset = [x, y]))
+#     return dfclean  
 
 def dataplot(df, x, y,image_path, log, xlabel, ylabel, iden = "None", gaindeplvol = 0, totdeplvol = 0, gainwidth = 0, breakdownVol = 0):
     """
