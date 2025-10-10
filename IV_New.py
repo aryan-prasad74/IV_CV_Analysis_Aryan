@@ -64,7 +64,7 @@ sensor_files = {}
 breakdownVolts = {}
 
 for cfile, ctitle in zip(files, fileTitles):
-    # Add Subdirectory for all files
+    # Add Subdirectory for all filepaths
     cfile = os.path.join("Measurement_CSVs", cfile)
 
     # Extract sensor ID, e.g., "W3108_12-14"
@@ -83,11 +83,13 @@ for cfile, ctitle in zip(files, fileTitles):
     if sensor_id not in breakdownVolts:
         breakdownVolts[sensor_id] = []
     breakdownVolts[sensor_id].append(breakdownVol)
+    #print(f"File: {ctitle}, Sensor: {sensor_id}, Breakdown Voltage: {breakdownVol:.2f} V")
 
     # Store filenames for that sensor
     if sensor_id not in sensor_files:
         sensor_files[sensor_id] = []
     sensor_files[sensor_id].append(cfile)
+    #print(f"{cfile} added to sensor {sensor_id}")
 
 
 # Calculating Average Breakdown Voltages for each sensor type
@@ -101,28 +103,26 @@ for sensor, vbd_list in breakdownVolts.items():
 
 
 # Averaging IV curves for each sensor
-avg_IV_curves = {}
+# Store cleaned DataFrames for each sensor for plotting/averaging
+sensor_dfs = {}
 for sensor, file_list in sensor_files.items():
     df_list = []
     for f in file_list:
         df = fun.storedataIV(f, options.rowName, separator=options.separatorString)
         df = fun.cleanupIV(df, options.voltageColumn, options.currentColumn)
-        # Round voltage to 1 decimal place
-        df.iloc[:, options.voltageColumn] = df.iloc[:, options.voltageColumn].round(1)
         df_list.append(df)
-    
-    # Concatenate all runs
-    combined = pd.concat(df_list)
-    # Group by voltage and average the currents
-    averaged = combined.groupby(combined.columns[options.voltageColumn]).mean().reset_index()
-    avg_IV_curves[sensor] = averaged
+    sensor_dfs[sensor] = df_list
 
 
-# Group sensors by family (prefix before underscore)
-sensor_families = defaultdict(list)
-for sensor in avg_IV_curves.keys():
+# Group sensors by family (prefix before underscore) using sensor_files
+sensor_families = {}
+for sensor in sensor_dfs.keys():
     family = sensor.split('_')[0]
+    if family not in sensor_families:
+        sensor_families[family] = []
     sensor_families[family].append(sensor)
+
+
 
 # Optional debugging output
 # print(sensor_families)
@@ -131,8 +131,34 @@ for sensor in avg_IV_curves.keys():
 
 
 ########## PLOTTING ##########
-########## PLOTTING ##########
-########## PLOTTING ##########
+
+
+# Plot averaged IV curves per sensor family
+for family, sensors in sensor_families.items():
+    # Collect all DataFrames for sensors in this family
+    family_dfs = {sensor: sensor_dfs[sensor] for sensor in sensors if sensor in sensor_dfs}
+    
+    # Collect corresponding breakdown voltages for each sensor
+    family_breakdowns = {sensor: avg_breakdown[sensor] for sensor in sensors if sensor in avg_breakdown}
+    
+    # Output path
+    save_path = os.path.join(options.outdir, f"Averaged_{family}_IV_TotCurr.png")
+    
+    fun.plot_family_avg_IV(family_name=family, sensor_dfs=family_dfs, voltage_col=options.voltageColumn,
+                           current_col=options.currentColumn, avg_breakdowns=family_breakdowns, save_path=save_path)
+
+
+    # # Call plotting function
+    # fun.plot_family_avg_IV(
+    #     family_name=family,
+    #     sensor_dfs=family_dfs,
+    #     voltage_col=options.voltageColumn,
+    #     current_col=options.currentColumn,
+    #     avg_breakdowns=family_breakdowns,
+    #     save_path=save_path
+    # )
+
+
 
 
 

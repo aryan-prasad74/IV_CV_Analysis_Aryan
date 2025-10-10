@@ -140,10 +140,6 @@ def cleanupIV(df, x, y):
     # Drop any rows with NaN (non-numeric or empty)
     df = df.dropna(subset=[df.columns[x], df.columns[y]]).reset_index(drop=True)
 
-    # Round for consistency
-    df.iloc[:, x] = df.iloc[:, x].round(1)
-    df.iloc[:, y] = df.iloc[:, y].round(12)
-
     return df
 
 # def cleanupIV(df, x, y):
@@ -765,6 +761,9 @@ def calcbreakdownVol(df,x, y):
     return breakdownVol
 
 
+
+# Test Functions #
+
 # Average IV curves from multiple CSVs (Assumes same V step size, takes overlapping region only)
 def average_IV_csvs(file_list, voltage_col=1, current_col=2, rowName="BEGIN", separator=","):
     """
@@ -820,3 +819,75 @@ def average_IV_csvs(file_list, voltage_col=1, current_col=2, rowName="BEGIN", se
     })
     
     return df_avg
+
+def plot_family_avg_IV(family_name, sensor_dfs, voltage_col, current_col, avg_breakdowns, save_path):
+    """
+    Plots averaged IV curves for all sensors in a family on one figure using specified colors.
+
+    Parameters:
+        family_name : str
+            Name of the sensor family (e.g., "W3108")
+        sensor_dfs : dict
+            Dictionary mapping sensor names to lists of cleaned IV DataFrames
+            e.g., {'W3108_12-09': [df1, df2], 'W3108_12-14': [df3, df4]}
+        voltage_col : int
+            Column index for voltage
+        current_col : int
+            Column index for current
+        avg_breakdowns : dict
+            Dictionary mapping sensor names to average breakdown voltage
+        save_path : str
+            Path to save the figure
+    """
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+
+    colors = ["#384860", "#298c8c93"]  # Cycle through these colors
+    plt.figure(figsize=(12, 6))
+
+    for i, (sensor, df_list) in enumerate(sensor_dfs.items()):
+        # Copy and combine all runs for this sensor
+        combined = pd.concat([df.copy() for df in df_list])
+
+        # Ceiling voltage to nearest integer
+        combined.iloc[:, voltage_col] = np.ceil(combined.iloc[:, voltage_col].values).astype(int)
+
+        # Group by voltage and average currents
+        volt_name = combined.columns[voltage_col]
+        curr_name = combined.columns[current_col]
+        averaged = combined.groupby(volt_name)[curr_name].mean(numeric_only=True).reset_index()
+
+        # Select color, cycle if more sensors than colors
+        color = colors[i % len(colors)]
+
+        # Plot this sensor
+        plt.plot(averaged[volt_name], averaged[curr_name], marker='o', label=sensor, color=color, markersize=5)
+
+        # Plot breakdown voltage as vertical dashed line
+        plt.axvline(avg_breakdowns[sensor], linestyle='--', color=color, alpha=0.7)
+
+        # Annotate breakdown voltage
+        ymin, ymax = plt.ylim()  # get current y-axis limits
+        y_pos = ymin + 0.0457 * (ymax - ymin)
+        plt.text(avg_breakdowns[sensor], y_pos,  
+         f"{avg_breakdowns[sensor]:.2f} V",
+         color=color, fontsize=12, rotation=90, va='top', ha='right')
+
+
+    plt.xlabel('Voltage (V)')
+    plt.ylabel('Current (A)')
+    plt.yscale('log')
+    plt.title(f'{family_name} IV Curves')
+    plt.axvline(
+    avg_breakdowns[sensor], 
+    linestyle='--', 
+    color=color, 
+    alpha=0.8)
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(save_path)
+    plt.close()
+
+
